@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="modernizr-1.7.min.js"></script>
+    <script src="raphael-min.js"></script>
+    <script src="underscore-min.js"></script>
+    <script src="jquery-1.5.min.js"></script>
+    <script src="base64.js"></script>
+</head>
+<body>
+<style>
+body{
+    background-color: #333;
+}
+
+#tenori{
+    background-color: #333;
+}
+</style>
+
+<script>
+var dot_radius = 15,
+    dot_margin = 10,
+    n_seqs = 32,
+    n_tones = 16,
+    interval = 100,
+    n_channels = 4,
+    channels = [],
+    tones = [];
+
+var sequencer = new Array(n_seqs * n_tones)
+
+function play(i){
+    fn = tones[i];
+    var now = new Date().getTime()
+
+    for(var c = 0; c<n_channels; c++){
+        var chn = channels[c];
+
+        if (chn.endtime < now){
+            chn.src = fn
+            chn.load();
+            chn.endtime = now + 50;
+            chn.play();
+            return;
+            }
+    }
+    //console.log("out of channels" + i);
+};
+
+$(function(){
+
+
+    if (Modernizr.audio && Modernizr.audio.ogg){
+        var audioType = ".ogg"
+        }
+        else if (Modernizr.audio && Modernizr.audio.mp3){
+        var audioType = ".mp3"
+    }
+
+    _.each(_.range(n_tones), function(i){
+       var fn = "data/sine_" + (n_tones - 1 - i) + audioType;
+       tones.push(fn);
+    });
+
+    var now = new Date();
+
+    _.each(_.range(n_channels), function(i){
+        a = new Audio(tones[i]);
+        a.endtime = now.getTime();
+        a.play();
+        channels.push(a);
+    });
+
+    var toneHash = function(){
+        var hash = "";
+        for (i=0; i<n_seqs; i++){
+            v = 0;
+            for(j=0; j < n_tones; j++){
+                seq = sequencer[i*n_tones +  j];
+                v += seq.state<<(j%16);
+            }
+            d =  v.toString(16);
+            if (d.length === 1) d = "00" + d;
+            if (d.length === 2) d = "0" + d;
+            hash = hash + d+ " ";
+        }
+        console.log(hash);
+        window.location.hash = hash;
+    }
+
+    var toneHash = function(){
+        var hash = "";
+        for (i=0; i<n_seqs; i++){
+            v = 0;
+            for(j=0; j < n_tones; j++){
+                if (sequencer[i*n_tones +  j].state ==1)  hash=hash+j.toString(16);
+            }
+
+            hash = hash + "."
+        }
+        console.log(hash);
+        window.location.hash = hash;
+    }
+
+    // Track mouse buttons
+    var mouseDown = 0;
+    document.body.onmousedown = function(){ ++mouseDown;}
+    document.body.onmouseup = function(){--mouseDown;}
+
+    var p = Raphael(document.getElementById("tenori"), 1200, 600);
+    _.each(_.range(n_seqs), function(x){
+        _.each(_.range(n_tones), function(y){
+                var r = dot_radius,
+                    m = dot_margin;
+
+                var c = p.circle(m + r + x * (2 * r + m),
+                                 m + r + y * (2 * r + m), r);
+                c.data = {x:x, y:y};
+                sequencer[x * n_tones + y] = {state: 0, dot:c, tone:y};
+                c.attr({fill:"#000", "stroke-width": 2, "stroke": "#aaa"});
+
+                var toggleTone = function(dot){
+                   var s = sequencer[dot.data.x * n_tones + dot.data.y];
+
+                    if (s.state == 0){
+                        s.state = 1;
+                        dot.animate({fill:"#fff"});
+                    }
+                    else{
+                        s.state = 0;
+                        dot.animate({fill:"#000"});
+                    }
+                    toneHash();
+                }
+
+                c.mouseover(function(e){
+                    this.animate({r:1.2 * r}, 100, ">");
+                    if (mouseDown){toggleTone(this);}
+                });
+                c.click(function(){toggleTone(this)});
+                c.mouseout(function(){ this.animate({r:r}, 500, ">")});
+            })
+        });
+        var indicator = p.rect(0+ dot_radius,n_tones * (dot_margin + 2*dot_radius) + dot_margin, dot_radius, dot_radius).attr({fill:"#fff", "stroke-opacity":0});
+
+        var current_seq = 0;
+
+        setInterval(function(){
+
+            _.each(_.range(n_tones), function(i){
+                var s = sequencer[current_seq * n_tones + i];
+                t = tones[i];
+                if (s.state == 1){
+                   setTimeout(function(){s.dot.animate({r: dot_radius*1.2}, 100)}, 0);
+                    setTimeout(function(){s.dot.animate({r:dot_radius*1}, 100)}, 100);
+                    play(i);
+                }
+            });
+
+            current_seq +=1;
+            if (current_seq ==  n_seqs) current_seq = 0;
+            indicator.animate({x :current_seq*(2*dot_radius + dot_margin)+ dot_radius}, interval/2);
+        }, interval)
+});
+
+
+
+
+</script>
+
+<div id="tenori"></div>
+</body>
+</html>
+
